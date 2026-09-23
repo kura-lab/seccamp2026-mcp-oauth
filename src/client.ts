@@ -1,8 +1,8 @@
-const express = require('express');
-const crypto = require('crypto');
-const axios = require('axios');
-const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
-const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/client/streamableHttp.js');
+import express, { Request, Response } from 'express';
+import crypto from 'crypto';
+import axios from 'axios';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 const app = express();
 const CLIENT_PORT = 3000;
@@ -32,7 +32,7 @@ app.get('/client-metadata.json', (req, res) => {
 });
 
 // 2. 認可フロー開始 (PKCE + CIMD)
-app.get('/login', (req, res) => {
+app.get('/login', (req: Request, res: Response) => {
   codeVerifier = crypto.randomBytes(32).toString('base64url');
   const codeChallenge = crypto
     .createHash('sha256')
@@ -52,7 +52,7 @@ app.get('/login', (req, res) => {
 });
 
 // 3. コールバック処理と MCP SDK による接続
-app.get('/callback', async (req, res) => {
+app.get('/callback', async (req: Request, res: Response) => {
   const { code } = req.query;
 
   if (!code) {

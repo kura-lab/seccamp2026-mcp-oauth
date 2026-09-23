@@ -35,10 +35,10 @@ npm i
 
 ```shell
 # Terminal 1
-node mcp-server.js
+npm run start:server
 ```
 
 ```shell
 # Terminal 2
-node mcp-client.js
+npm run start:client
 ```

@@ -1,8 +1,8 @@
-const express = require('express');
-const { createRemoteJWKSet, jwtVerify } = require('jose');
-const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
-const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
-const { z } = require('zod');
+import express, { Request, Response, NextFunction } from 'express';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { z } from 'zod';
 
 const app = express();
 app.use(express.json());
@@ -17,7 +17,7 @@ const MCP_SERVER_RESOURCE = `http://localhost:${SERVER_PORT}`;
 const jwks = createRemoteJWKSet(new URL(JWKS_URL));
 
 // Keycloakトークン検証ミドルウェア
-async function verifyToken(req, res, next) {
+async function verifyToken(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Bearerトークンが存在しません' });
@@ -73,7 +73,7 @@ function createMcpServer()  {
 }
 
 // ステートレスな単一のPOSTエンドポイント
-app.post('/messages', verifyToken, async (req, res) => {
+app.post('/messages', verifyToken as express.RequestHandler, async (req: Request, res: Response) => {
     try {
     // リクエストごとにトランスポートとサーバーを作成
     const transport = new StreamableHTTPServerTransport();
