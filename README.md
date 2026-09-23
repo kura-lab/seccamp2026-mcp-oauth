@@ -16,3 +16,29 @@ MCP OAuth apps
 ```shell
 npm i
 ```
+
+### Start Keycloak
+
+```shell
+# mac/Linux
+./bin/kc.sh start-dev --http-port 18080 --features=cimd
+```
+
+```shell
+# Windows
+.\bin\kc.bat start-dev --http-port 18080 --features=cimd
+```
+
+* http://localhost:18080
+
+### Start MCP Server and Client
+
+```shell
+# Terminal 1
+node mcp-server.js
+```
+
+```shell
+# Terminal 2
+node mcp-client.js
+```

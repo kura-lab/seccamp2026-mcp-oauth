@@ -1,8 +1,8 @@
 const express = require('express');
 const { createRemoteJWKSet, jwtVerify } = require('jose');
-const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
-const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js');
-const { CallToolRequestSchema, ListToolsRequestSchema } = require('@modelcontextprotocol/sdk/types.js');
+const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
+const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
+const { z } = require('zod');
 
 const app = express();
 app.use(express.json());
@@ -43,74 +43,55 @@ async function verifyToken(req, res, next) {
   }
 }
 
-// 1. MCP SDK サーバーインスタンスの生成
-const mcpServer = new Server(
-  { name: 'sample-mcp-server', version: '1.0.0' },
-  { capabilities: { tools: {} } }
-);
-
-// 利用可能なツールの定義ハンドラー
-mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: 'get_greeting',
-        description: '指定した名前への挨拶文を生成します',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            name: { type: 'string', description: '対象の名前' }
-          },
-          required: ['name']
-        }
-      }
-    ]
-  };
-});
-
-// ツール実行ハンドラー
-mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === 'get_greeting') {
-    const name = request.params.arguments?.name || 'ゲスト';
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `[MCP SDK] こんにちは、${name}さん！Keycloak認証による認可が完了しました。`
-        }
-      ]
-    };
-  }
-  throw new Error('指定されたツールが存在しません');
-});
-
-// ActiveなSSEトランスポートのセッション管理
-const transports = {};
-
-// 2. SSE エンドポイント（保護対象）
-app.get('/sse', verifyToken, async (req, res) => {
-  const transport = new SSEServerTransport('/messages', res);
-  transports[transport.sessionId] = transport;
-
-  req.on('close', () => {
-    delete transports[transport.sessionId];
+function createMcpServer()  {
+  // MCP サーバーの初期化
+  const server = new McpServer({
+    name: 'sample-oauth-mcp-server',
+    version: '1.0.0',
   });
 
-  await mcpServer.connect(transport);
-});
+  // ツールの定義
+  server.tool(
+    'get_greeting',
+    '指定した名前への挨拶文を生成します',
+    {
+      name: z.string().default('ゲスト').describe('対象の名前'),
+    },
+    async ({ name }) => {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `[MCP SDK] こんにちは、${name}さん！Keycloak認証による認可が完了しました。`,
+          },
+        ],
+      }
+    }
+  );
 
-// 3. Message エンドポイント（保護対象）
+  return server;
+}
+
+// ステートレスな単一のPOSTエンドポイント
 app.post('/messages', verifyToken, async (req, res) => {
-  const sessionId = req.query.sessionId;
-  const transport = transports[sessionId];
+    try {
+    // リクエストごとにトランスポートとサーバーを作成
+    const transport = new StreamableHTTPServerTransport();
+    const server = createMcpServer();
 
-  if (transport) {
-    await transport.handlePostMessage(req, res, req.body);
-  } else {
-    res.status(400).send('有効なセッションが見つかりません');
+    // 接続のセットアップ
+    await server.connect(transport);
+
+    // リクエストの処理とレスポンス送信
+    await transport.handleRequest(req, res, req.body);
+  } catch (error) {
+    console.error('Error handling MCP request:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
   }
 });
 
 app.listen(SERVER_PORT, () => {
-  console.log(`[MCP Server] http://localhost:${SERVER_PORT} で起動しました。`);
+  console.log(`[MCP Server] http://localhost:${SERVER_PORT}/messages で起動しました。`);
 });

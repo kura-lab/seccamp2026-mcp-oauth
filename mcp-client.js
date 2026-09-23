@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
-const { SSEClientTransport } = require('@modelcontextprotocol/sdk/client/sse.js');
+const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/client/streamableHttp.js');
 
 const app = express();
 const CLIENT_PORT = 3000;
@@ -76,10 +76,10 @@ app.get('/callback', async (req, res) => {
     const accessToken = tokenResponse.data.access_token;
 
     // --- MCP SDK による通信確立 ---
-    const sseUrl = new URL(`${MCP_SERVER_RESOURCE}/sse`);
-    
+    const streamableHttpUrl = new URL(`${MCP_SERVER_RESOURCE}/messages`);
+
     // トランスポート層の初期化（Authorizationヘッダーへトークンを設定）
-    const transport = new SSEClientTransport(sseUrl, {
+    const transport = new StreamableHTTPClientTransport(streamableHttpUrl, {
       eventSourceInit: {
         headers: { Authorization: `Bearer ${accessToken}` }
       },
@@ -88,35 +88,49 @@ app.get('/callback', async (req, res) => {
       }
     });
 
-    const mcpClient = new Client(
-      { name: "sample-mcp-client", version: "1.0.0" },
-      { capabilities: {} }
+    const client = new Client(
+      {
+        name: 'sample-mcp-client',
+        version: '1.0.0'
+      },
+      {
+        capabilities: {}
+      }
     );
 
     // MCPサーバーへ接続
-    await mcpClient.connect(transport);
+    await client.connect(transport);
+    console.log('Connected to MCP server via Streamable HTTP...');
 
     // ツール一覧の取得 (MCP SDK API)
-    const toolsList = await mcpClient.listTools();
+    const tools = await client.listTools();
+    console.log('Available tools:', JSON.stringify(tools, null, 2));
 
     // ツールの実行 (MCP SDK API)
-    const toolResult = await mcpClient.callTool({
-      name: "get_greeting",
-      arguments: { name: "Keycloak User" }
+    console.log('--- Executing Tool: get_greeting ---');
+    const toolResult = await client.callTool({
+      name: 'get_greeting',
+      arguments: {
+        name: 'Keycloak User'
+      }
     });
 
-    // 通信の終了処理
-    await mcpClient.close();
+    console.log("Response:", JSON.stringify(toolResult, null, 2));
+
+    // セッションのクローズ
+    await client.close();
+    console.log('Connection closed.');
 
     res.send(`
       <h1>MCP SDK 通信成功</h1>
       <h2>取得したツール一覧:</h2>
-      <pre>${JSON.stringify(toolsList, null, 2)}</pre>
+      <pre>${JSON.stringify(tools, null, 2)}</pre>
       <h2>ツール実行結果:</h2>
       <pre>${JSON.stringify(toolResult, null, 2)}</pre>
-    `);
+      `);
+
   } catch (error) {
-    console.error('エラー発生:', error);
+    console.error('Error in MCP client:', error);
     res.status(500).send(`エラーが発生しました: ${error.message}`);
   }
 });
